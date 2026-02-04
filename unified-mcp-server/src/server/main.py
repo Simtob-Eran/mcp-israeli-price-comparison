@@ -19,13 +19,14 @@ from ..tools import (
     extract_structured_data,
     fetch_page_content,
     get_average_market_price,
+    get_available_providers,
     get_price_history,
+    image_search,
     normalize_product_name,
     parse_price,
     save_search_result,
-    serper_images,
-    serper_search,
-    serper_shopping,
+    shopping_search,
+    web_search,
 )
 from ..utils.database import get_database
 from .middleware import setup_logging, setup_middleware
@@ -38,10 +39,10 @@ mcp_server = Server("price-comparison-mcp")
 
 # Tool registry mapping tool names to their implementations
 TOOL_REGISTRY: Dict[str, Any] = {
-    # Serper tools
-    "serper_search": serper_search,
-    "serper_shopping": serper_shopping,
-    "serper_images": serper_images,
+    # Search tools (with fallback support)
+    "web_search": web_search,
+    "shopping_search": shopping_search,
+    "image_search": image_search,
     # Scraping tools
     "fetch_page_content": fetch_page_content,
     "extract_structured_data": extract_structured_data,
@@ -59,10 +60,10 @@ TOOL_REGISTRY: Dict[str, Any] = {
 
 # Tool definitions for MCP protocol
 TOOL_DEFINITIONS: List[ToolDefinition] = [
-    # Serper Search Tools
+    # Search Tools (with smart fallback)
     ToolDefinition(
-        name="serper_search",
-        description="Perform Google search via Serper API. Returns organic results, knowledge graph, and related searches.",
+        name="web_search",
+        description="Perform web search with automatic fallback to free providers. Tries: Serper API (if key exists), DuckDuckGo, Google scraping, Bing scraping.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -71,13 +72,18 @@ TOOL_DEFINITIONS: List[ToolDefinition] = [
                 "country": {"type": "string", "default": "il", "description": "Country code for localized results"},
                 "language": {"type": "string", "default": "he", "description": "Language code"},
                 "use_cache": {"type": "boolean", "default": True, "description": "Use cached results if available"},
+                "preferred_providers": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Preferred provider order: serper, duckduckgo, google_scraper, bing_scraper",
+                },
             },
             "required": ["query"],
         },
     ),
     ToolDefinition(
-        name="serper_shopping",
-        description="Perform Google Shopping search via Serper API. Specialized for product searches with pricing data.",
+        name="shopping_search",
+        description="Search for products with prices. Automatic fallback: Serper Shopping, Google Shopping scraping, DuckDuckGo, Bing.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -86,13 +92,18 @@ TOOL_DEFINITIONS: List[ToolDefinition] = [
                 "country": {"type": "string", "default": "il", "description": "Country code"},
                 "language": {"type": "string", "default": "he", "description": "Language code"},
                 "use_cache": {"type": "boolean", "default": True, "description": "Use cached results if available"},
+                "preferred_providers": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Preferred provider order",
+                },
             },
             "required": ["query"],
         },
     ),
     ToolDefinition(
-        name="serper_images",
-        description="Search Google Images via Serper API. Useful for visual product identification.",
+        name="image_search",
+        description="Search for images with automatic fallback to free providers.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -101,6 +112,11 @@ TOOL_DEFINITIONS: List[ToolDefinition] = [
                 "country": {"type": "string", "default": "il", "description": "Country code"},
                 "language": {"type": "string", "default": "he", "description": "Language code"},
                 "use_cache": {"type": "boolean", "default": True, "description": "Use cached results if available"},
+                "preferred_providers": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Preferred provider order",
+                },
             },
             "required": ["query"],
         },
@@ -272,6 +288,10 @@ async def lifespan(app: FastAPI):
     setup_logging()
     logger.info("Starting Price Comparison MCP Server")
 
+    # Log available search providers
+    providers = get_available_providers()
+    logger.info(f"Available search providers: {', '.join(providers)}")
+
     # Initialize database
     db = await get_database()
     logger.info("Database initialized")
@@ -292,8 +312,8 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Unified Price Comparison MCP Server",
-        description="MCP server providing tools for web search, scraping, price intelligence, and data storage",
-        version="1.0.0",
+        description="MCP server providing tools for web search, scraping, price intelligence, and data storage. Supports multiple free search providers with automatic fallback.",
+        version="1.1.0",
         lifespan=lifespan,
     )
 
@@ -321,11 +341,25 @@ def register_routes(app: FastAPI) -> None:
     @app.get("/health")
     async def health():
         """Detailed health check."""
+        providers = get_available_providers()
         return {
             "status": "healthy",
             "service": "price-comparison-mcp",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "tools_count": len(TOOL_DEFINITIONS),
+            "search_providers": providers,
+        }
+
+    @app.get("/mcp/providers")
+    async def list_providers():
+        """List available search providers.
+
+        Returns:
+            List of available search provider names.
+        """
+        return {
+            "providers": get_available_providers(),
+            "fallback_order": ["serper", "duckduckgo", "google_scraper", "bing_scraper"],
         }
 
     @app.get("/mcp/tools")
@@ -481,6 +515,7 @@ async def handle_initialize(request: MCPRequest) -> JSONResponse:
     Returns:
         JSON response with server capabilities.
     """
+    providers = get_available_providers()
     return JSONResponse(
         content={
             "jsonrpc": "2.0",
@@ -491,7 +526,8 @@ async def handle_initialize(request: MCPRequest) -> JSONResponse:
                 },
                 "serverInfo": {
                     "name": "price-comparison-mcp",
-                    "version": "1.0.0",
+                    "version": "1.1.0",
+                    "searchProviders": providers,
                 },
             },
             "id": request.id,

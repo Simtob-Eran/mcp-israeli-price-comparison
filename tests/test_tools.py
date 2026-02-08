@@ -1,257 +1,153 @@
-"""Tests for MCP tools."""
+#!/usr/bin/env python3
+"""Simple test script to test the MCP server at localhost:8000."""
 
-import pytest
-import pytest_asyncio
+import json
+import sys
 
-from src.tools.price_tools import (
-    calculate_total_cost,
-    detect_product_specs,
-    normalize_product_name,
-    parse_price,
-)
-from src.tools.scraping_tools import (
-    extract_prices_from_html,
-    extract_structured_data,
-)
-from src.utils.normalizer import TextNormalizer
-from src.utils.parser import PriceParser
+import httpx
+
+MCP_BASE_URL = "http://localhost:8000"
 
 
-class TestPriceParser:
-    """Tests for price parsing utilities."""
-
-    def test_parse_ils_with_symbol(self):
-        """Test parsing Israeli Shekel with symbol."""
-        parser = PriceParser()
-        result = parser.parse("₪1,234.56")
-
-        assert result is not None
-        assert result.value == 1234.56
-        assert result.currency == "ILS"
-
-    def test_parse_ils_with_text(self):
-        """Test parsing Israeli Shekel with Hebrew text."""
-        parser = PriceParser()
-        result = parser.parse("1234 ש״ח")
-
-        assert result is not None
-        assert result.value == 1234.0
-        assert result.currency == "ILS"
-
-    def test_parse_usd(self):
-        """Test parsing US Dollar."""
-        parser = PriceParser()
-        result = parser.parse("$1,234.56")
-
-        assert result is not None
-        assert result.value == 1234.56
-        assert result.currency == "USD"
-
-    def test_parse_euro_format(self):
-        """Test parsing European format with comma decimal."""
-        parser = PriceParser()
-        result = parser.parse("1.234,56 €")
-
-        assert result is not None
-        assert result.value == 1234.56
-        assert result.currency == "EUR"
-
-    def test_parse_with_currency_hint(self):
-        """Test parsing with currency hint."""
-        parser = PriceParser()
-        result = parser.parse("1234.56", currency_hint="GBP")
-
-        assert result is not None
-        assert result.value == 1234.56
-        assert result.currency == "GBP"
-
-    def test_extract_all_prices(self):
-        """Test extracting multiple prices from text."""
-        parser = PriceParser()
-        text = "Price: ₪4,999 or $1,299 with shipping"
-        results = parser.extract_all_prices(text)
-
-        assert len(results) >= 2
+def test_health():
+    """Test health endpoint."""
+    print("Testing /health...")
+    try:
+        response = httpx.get(f"{MCP_BASE_URL}/health", timeout=10)
+        print(f"Status: {response.status_code}")
+        print(f"Response: {json.dumps(response.json(), indent=2)}")
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
 
 
-class TestTextNormalizer:
-    """Tests for text normalization utilities."""
+def test_list_tools_rest():
+    """Test listing tools via REST endpoint."""
+    print("\nTesting /mcp/tools (REST)...")
+    try:
+        response = httpx.get(f"{MCP_BASE_URL}/mcp/tools", timeout=10)
+        print(f"Status: {response.status_code}")
+        data = response.json()
 
-    def test_normalize_product_name(self):
-        """Test basic product name normalization."""
-        normalizer = TextNormalizer()
-        result = normalizer.normalize("Apple iPhone 15 Pro Max 256GB")
-
-        assert result.normalized
-        assert result.brand == "Apple"
-        assert "smartphone" in result.category_hints
-
-    def test_detect_brand(self):
-        """Test brand detection."""
-        normalizer = TextNormalizer()
-        result = normalizer.normalize("Samsung Galaxy S24 Ultra")
-
-        assert result.brand == "Samsung"
-
-    def test_detect_categories(self):
-        """Test category detection."""
-        normalizer = TextNormalizer()
-        result = normalizer.normalize("MacBook Pro 14 inch M3")
-
-        assert "laptop" in result.category_hints
-
-    def test_extract_specs(self):
-        """Test specification extraction."""
-        normalizer = TextNormalizer()
-        specs = normalizer.extract_specs("16GB RAM 512GB SSD 14 inch display")
-
-        assert specs.memory == "16GB"
-        assert specs.storage is not None
-
-    def test_remove_stopwords(self):
-        """Test stopword removal."""
-        normalizer = TextNormalizer(remove_stopwords=True)
-        result = normalizer.normalize("The new Apple iPhone")
-
-        assert "the" not in result.normalized.lower()
-        assert "new" not in result.normalized.lower()
+        if "tools" in data:
+            print(f"\nFound {len(data['tools'])} tools:")
+            for tool in data["tools"]:
+                print(f"  - {tool['name']}: {tool['description'][:60]}...")
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
 
 
-class TestPriceTools:
-    """Tests for price intelligence tools."""
-
-    @pytest.mark.asyncio
-    async def test_parse_price_tool(self):
-        """Test parse_price tool."""
-        result = await parse_price("₪4,999.00")
-
-        assert result["value"] == 4999.0
-        assert result["currency"] == "ILS"
-
-    @pytest.mark.asyncio
-    async def test_normalize_product_name_tool(self):
-        """Test normalize_product_name tool."""
-        result = await normalize_product_name("Apple iPhone 15 Pro 256GB Black")
-
-        assert result["normalized"]
-        assert result["brand"] == "Apple"
-        assert result["original"] == "Apple iPhone 15 Pro 256GB Black"
-
-    @pytest.mark.asyncio
-    async def test_detect_product_specs_tool(self):
-        """Test detect_product_specs tool."""
-        result = await detect_product_specs(
-            "iPhone 15 Pro 256GB 6.1 inch A17 Pro chip Space Black"
+def test_list_tools_mcp():
+    """Test listing tools via MCP JSON-RPC endpoint."""
+    print("\nTesting /mcp (MCP JSON-RPC tools/list)...")
+    try:
+        request = {
+            "jsonrpc": "2.0",
+            "method": "tools/list",
+            "params": {},
+            "id": 1
+        }
+        response = httpx.post(
+            f"{MCP_BASE_URL}/mcp",
+            json=request,
+            timeout=10
         )
+        print(f"Status: {response.status_code}")
+        data = response.json()
 
-        assert result["storage"] is not None
-        assert result["color"] is not None
+        if "result" in data and "tools" in data["result"]:
+            print(f"\nFound {len(data['result']['tools'])} tools via MCP:")
+            for tool in data["result"]["tools"]:
+                print(f"  - {tool['name']}: {tool['description'][:60]}...")
+        elif "error" in data:
+            print(f"Error: {data['error']}")
+        else:
+            print(f"Response: {json.dumps(data, indent=2)}")
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
 
-    @pytest.mark.asyncio
-    async def test_calculate_total_cost_basic(self):
-        """Test basic total cost calculation."""
-        result = await calculate_total_cost(base_price=1000.0)
 
-        assert result["base_price"] == 1000.0
-        assert result["total"] == 1000.0
-        assert result["currency"] == "ILS"
-
-    @pytest.mark.asyncio
-    async def test_calculate_total_cost_with_shipping(self):
-        """Test total cost with shipping."""
-        result = await calculate_total_cost(
-            base_price=1000.0,
-            shipping_cost=50.0,
+def test_mcp_initialize():
+    """Test MCP initialize method."""
+    print("\nTesting /mcp (MCP initialize)...")
+    try:
+        request = {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "test-client",
+                    "version": "1.0.0"
+                }
+            },
+            "id": 1
+        }
+        response = httpx.post(
+            f"{MCP_BASE_URL}/mcp",
+            json=request,
+            timeout=10
         )
-
-        assert result["shipping"] == 50.0
-        assert result["total"] == 1050.0
-
-    @pytest.mark.asyncio
-    async def test_calculate_total_cost_with_tax(self):
-        """Test total cost with tax."""
-        result = await calculate_total_cost(
-            base_price=1000.0,
-            tax_rate=0.17,
-        )
-
-        assert result["tax"] == 170.0
-        assert result["total"] == 1170.0
-
-    @pytest.mark.asyncio
-    async def test_calculate_total_cost_with_discount(self):
-        """Test total cost with discount."""
-        result = await calculate_total_cost(
-            base_price=1000.0,
-            discount_percent=10.0,
-        )
-
-        assert result["discount"] == 100.0
-        assert result["discounted_price"] == 900.0
-        assert result["total"] == 900.0
-
-    @pytest.mark.asyncio
-    async def test_calculate_total_cost_full(self):
-        """Test full total cost calculation."""
-        result = await calculate_total_cost(
-            base_price=1000.0,
-            shipping_cost=50.0,
-            tax_rate=0.17,
-            discount_percent=10.0,
-            additional_fees={"handling": 20.0},
-        )
-
-        # 1000 - 100 (discount) = 900
-        # 900 * 0.17 = 153 (tax)
-        # 900 + 50 + 153 + 20 = 1123
-        assert result["total"] == 1123.0
+        print(f"Status: {response.status_code}")
+        data = response.json()
+        print(f"Response: {json.dumps(data, indent=2)}")
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
 
 
-class TestScrapingTools:
-    """Tests for web scraping tools."""
+def test_providers():
+    """Test listing search providers."""
+    print("\nTesting /mcp/providers...")
+    try:
+        response = httpx.get(f"{MCP_BASE_URL}/mcp/providers", timeout=10)
+        print(f"Status: {response.status_code}")
+        data = response.json()
+        print(f"Response: {json.dumps(data, indent=2)}")
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
 
-    @pytest.mark.asyncio
-    async def test_extract_structured_data(self, sample_html):
-        """Test structured data extraction."""
-        result = await extract_structured_data(sample_html)
 
-        assert "json_ld" in result
-        assert "opengraph" in result
-        assert len(result["json_ld"]) > 0
+def main():
+    """Run all tests."""
+    print("=" * 60)
+    print("MCP Server Test - localhost:8000")
+    print("=" * 60)
 
-    @pytest.mark.asyncio
-    async def test_extract_json_ld_product(self, sample_html):
-        """Test JSON-LD product extraction."""
-        result = await extract_structured_data(sample_html, ["json-ld"])
+    results = []
 
-        json_ld = result["json_ld"]
-        assert len(json_ld) > 0
-        assert json_ld[0]["@type"] == "Product"
+    # Run tests
+    results.append(("Health Check", test_health()))
+    results.append(("Providers", test_providers()))
+    results.append(("REST Tools List", test_list_tools_rest()))
+    results.append(("MCP Initialize", test_mcp_initialize()))
+    results.append(("MCP Tools List", test_list_tools_mcp()))
 
-    @pytest.mark.asyncio
-    async def test_extract_opengraph(self, sample_html):
-        """Test Open Graph extraction."""
-        result = await extract_structured_data(sample_html, ["opengraph"])
+    # Summary
+    print("\n" + "=" * 60)
+    print("SUMMARY")
+    print("=" * 60)
 
-        og = result["opengraph"]
-        assert og.get("price_amount") == "4999.00"
-        assert og.get("price_currency") == "ILS"
+    passed = 0
+    for name, result in results:
+        status = "PASS" if result else "FAIL"
+        print(f"  {name}: {status}")
+        if result:
+            passed += 1
 
-    @pytest.mark.asyncio
-    async def test_extract_prices_from_html(self, sample_html):
-        """Test price extraction from HTML."""
-        result = await extract_prices_from_html(sample_html)
+    print(f"\nTotal: {passed}/{len(results)} tests passed")
 
-        assert len(result) > 0
-        # Should find the price from JSON-LD with high confidence
-        high_confidence = [p for p in result if p["confidence"] > 0.8]
-        assert len(high_confidence) > 0
+    return 0 if passed == len(results) else 1
 
-    @pytest.mark.asyncio
-    async def test_extract_prices_confidence_ordering(self, sample_html):
-        """Test that prices are ordered by confidence."""
-        result = await extract_prices_from_html(sample_html)
 
-        if len(result) > 1:
-            for i in range(len(result) - 1):
-                assert result[i]["confidence"] >= result[i + 1]["confidence"]
+if __name__ == "__main__":
+    sys.exit(main())

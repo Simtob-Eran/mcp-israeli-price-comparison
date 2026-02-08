@@ -1,5 +1,6 @@
 """Main FastAPI application with MCP server integration."""
 
+import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
@@ -505,6 +506,99 @@ def register_routes(app: FastAPI) -> None:
             },
         )
 
+    @app.get("/sse")
+    async def sse_endpoint(request: Request):
+        """SSE endpoint for MCP clients.
+
+        Standard MCP SSE transport endpoint that streams messages to clients.
+        Clients should POST to /messages to send requests.
+
+        Returns:
+            StreamingResponse with SSE events for MCP messages.
+        """
+        async def event_stream():
+            # Send endpoint message to tell client where to POST
+            endpoint_msg = {
+                "jsonrpc": "2.0",
+                "method": "endpoint",
+                "params": {"uri": "/messages"}
+            }
+            yield f"event: endpoint\ndata: {json.dumps(endpoint_msg)}\n\n"
+
+            # Keep connection alive with heartbeat
+            while True:
+                await asyncio.sleep(30)
+                yield f": heartbeat\n\n"
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    @app.post("/messages")
+    async def messages_endpoint(request: Request):
+        """Handle MCP JSON-RPC messages.
+
+        Standard MCP message endpoint for receiving client requests.
+
+        Args:
+            request: FastAPI request object.
+
+        Returns:
+            JSON-RPC response.
+        """
+        try:
+            body = await request.json()
+            mcp_request = MCPRequest(**body)
+        except Exception as e:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32700, "message": f"Parse error: {str(e)}"},
+                    "id": None,
+                },
+            )
+
+        # Handle different MCP methods
+        if mcp_request.method == "tools/list":
+            return await handle_tools_list(mcp_request)
+
+        elif mcp_request.method == "tools/call":
+            # For messages endpoint, return JSON response instead of SSE
+            return await handle_tools_call_json(mcp_request)
+
+        elif mcp_request.method == "initialize":
+            return await handle_initialize(mcp_request)
+
+        elif mcp_request.method == "initialized":
+            # Client notification that initialization is complete
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0",
+                    "result": {},
+                    "id": mcp_request.id,
+                }
+            )
+
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32601,
+                        "message": f"Method not found: {mcp_request.method}",
+                    },
+                    "id": mcp_request.id,
+                },
+            )
+
 
 async def handle_initialize(request: MCPRequest) -> JSONResponse:
     """Handle MCP initialize request.
@@ -560,6 +654,63 @@ async def handle_tools_list(request: MCPRequest) -> JSONResponse:
             "id": request.id,
         }
     )
+
+
+async def handle_tools_call_json(request: MCPRequest) -> JSONResponse:
+    """Handle MCP tools/call request with JSON response (non-streaming).
+
+    Args:
+        request: MCP request object.
+
+    Returns:
+        JSON response with tool result.
+    """
+    params = request.params
+    if isinstance(params, dict):
+        tool_name = params.get("name")
+        arguments = params.get("arguments", {})
+    else:
+        tool_name = params.name
+        arguments = params.arguments
+
+    if tool_name not in TOOL_REGISTRY:
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32602,
+                    "message": f"Unknown tool: {tool_name}",
+                },
+                "id": request.id,
+            }
+        )
+
+    try:
+        executor = TOOL_REGISTRY[tool_name]
+        result = await executor(**arguments)
+
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [{"type": "text", "text": json.dumps(result)}],
+                },
+                "id": request.id,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Tool execution error: {tool_name} - {e}")
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32000,
+                    "message": str(e),
+                },
+                "id": request.id,
+            }
+        )
 
 
 async def handle_tools_call(request: MCPRequest) -> StreamingResponse:

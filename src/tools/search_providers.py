@@ -1,7 +1,9 @@
 """Free search providers with fallback support."""
 
+import asyncio
 import json
 import logging
+import time
 import urllib.parse
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
@@ -12,6 +14,40 @@ from bs4 import BeautifulSoup
 from ..config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+class RateLimiter:
+    """Rate limiter to prevent being blocked by search providers.
+
+    Ensures at least `min_interval` seconds between requests.
+    """
+
+    def __init__(self, min_interval: float = 5.0):
+        """Initialize rate limiter.
+
+        Args:
+            min_interval: Minimum seconds between requests.
+        """
+        self.min_interval = min_interval
+        self.last_request_time: float = 0.0
+        self._lock = asyncio.Lock()
+
+    async def wait(self):
+        """Wait if necessary to respect rate limit."""
+        async with self._lock:
+            now = time.time()
+            elapsed = now - self.last_request_time
+
+            if elapsed < self.min_interval:
+                wait_time = self.min_interval - elapsed
+                logger.info(f"Rate limiting: waiting {wait_time:.1f}s before next request")
+                await asyncio.sleep(wait_time)
+
+            self.last_request_time = time.time()
+
+
+# Global rate limiter - 5 seconds between searches
+rate_limiter = RateLimiter(min_interval=5.0)
 
 
 class SearchProvider(ABC):
@@ -735,6 +771,9 @@ async def search_with_fallback(
             continue
 
         try:
+            # Apply rate limiting before each search request
+            await rate_limiter.wait()
+
             logger.info(f"Trying {provider_name} for {search_type}: {query}")
 
             if search_type == "search":

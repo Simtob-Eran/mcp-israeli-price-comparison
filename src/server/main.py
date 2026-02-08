@@ -63,7 +63,7 @@ TOOL_DEFINITIONS: List[ToolDefinition] = [
     # Search Tools (with smart fallback)
     ToolDefinition(
         name="web_search",
-        description="Perform web search with automatic fallback to free providers. Tries: Serper API (if key exists), DuckDuckGo, Google scraping, Bing scraping.",
+        description="Perform web search with automatic fallback to free providers. Tries: DuckDuckGo, Google scraping, Bing scraping.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -75,7 +75,7 @@ TOOL_DEFINITIONS: List[ToolDefinition] = [
                 "preferred_providers": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Preferred provider order: serper, duckduckgo, google_scraper, bing_scraper",
+                    "description": "Preferred provider order: duckduckgo, google_scraper, bing_scraper",
                 },
             },
             "required": ["query"],
@@ -83,7 +83,7 @@ TOOL_DEFINITIONS: List[ToolDefinition] = [
     ),
     ToolDefinition(
         name="shopping_search",
-        description="Search for products with prices. Automatic fallback: Serper Shopping, Google Shopping scraping, DuckDuckGo, Bing.",
+        description="Search for products with prices. Automatic fallback: Google Shopping scraping, DuckDuckGo, Bing.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -359,7 +359,7 @@ def register_routes(app: FastAPI) -> None:
         """
         return {
             "providers": get_available_providers(),
-            "fallback_order": ["serper", "duckduckgo", "google_scraper", "bing_scraper"],
+            "fallback_order": ["duckduckgo", "google_scraper", "bing_scraper"],
         }
 
     @app.get("/mcp/tools")

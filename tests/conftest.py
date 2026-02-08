@@ -37,7 +37,6 @@ def test_settings() -> Settings:
             PORT=8001,
             DEBUG=True,
             DATABASE_PATH=f"{tmpdir}/test_prices.db",
-            SERPER_API_KEY="test_key",
             LOG_LEVEL="DEBUG",
         )
 

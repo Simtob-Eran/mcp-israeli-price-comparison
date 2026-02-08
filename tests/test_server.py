@@ -25,7 +25,7 @@ class TestHealthEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
-        assert data["version"] == "1.0.0"
+        assert data["version"] == "1.1.0"
         assert "tools_count" in data
 
 
@@ -53,11 +53,11 @@ class TestToolsEndpoints:
 
     def test_get_specific_tool(self, client: TestClient):
         """Test getting a specific tool definition."""
-        response = client.get("/mcp/tools/serper_search")
+        response = client.get("/mcp/tools/web_search")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["name"] == "serper_search"
+        assert data["name"] == "web_search"
         assert "inputSchema" in data
 
     def test_get_nonexistent_tool(self, client: TestClient):

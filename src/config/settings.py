@@ -1,7 +1,6 @@
 """Application settings and configuration."""
 
 from functools import lru_cache
-from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,10 +18,6 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = False
-
-    # Serper API configuration
-    SERPER_API_KEY: Optional[str] = None
-    SERPER_BASE_URL: str = "https://google.serper.dev"
 
     # Scraping configuration
     USER_AGENT: str = (

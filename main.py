@@ -8,14 +8,13 @@ Usage:
     python main.py
 
 Environment Variables:
-    SERPER_API_KEY: API key for Serper (Google Search) integration
     HOST: Server host (default: 0.0.0.0)
     PORT: Server port (default: 8000)
     DEBUG: Enable debug mode (default: false)
     LOG_LEVEL: Logging level (default: INFO)
 
 Example:
-    SERPER_API_KEY=your_key python main.py
+    python main.py
 """
 
 import asyncio
@@ -49,18 +48,21 @@ def main() -> None:
     ║    GET  /              - Health check                        ║
     ║    GET  /health        - Detailed health status              ║
     ║    GET  /mcp/tools     - List available tools                ║
+    ║    GET  /mcp/providers - List search providers               ║
     ║    POST /mcp           - MCP JSON-RPC endpoint (SSE)         ║
     ║    POST /mcp/stream    - Streaming tool execution            ║
     ║    GET  /docs          - OpenAPI documentation               ║
     ╠══════════════════════════════════════════════════════════════╣
     ║  Available Tools (13):                                       ║
-    ║    - serper_search          - serper_shopping                ║
-    ║    - serper_images          - fetch_page_content             ║
+    ║    - web_search            - shopping_search                 ║
+    ║    - image_search          - fetch_page_content              ║
     ║    - extract_structured_data - extract_prices_from_html      ║
     ║    - parse_price            - normalize_product_name         ║
     ║    - detect_product_specs   - calculate_total_cost           ║
     ║    - save_search_result     - get_price_history              ║
     ║    - get_average_market_price                                ║
+    ╠══════════════════════════════════════════════════════════════╣
+    ║  Search Providers: DuckDuckGo, Google, Bing (free)           ║
     ╚══════════════════════════════════════════════════════════════╝
     """)
 

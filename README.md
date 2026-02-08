@@ -5,7 +5,8 @@ A comprehensive Model Context Protocol (MCP) server with HTTP SSE (Server-Sent E
 ## Features
 
 - **MCP Protocol Support**: Full JSON-RPC 2.0 implementation with SSE streaming
-- **13 Specialized Tools**: Web search, scraping, price intelligence, and data storage
+- **Free Search Providers**: Uses DuckDuckGo, Google scraping, and Bing with smart fallback
+- **10 Specialized Tools**: Web search, scraping, price intelligence, and data storage
 - **Real-time Streaming**: Server-Sent Events for live progress updates
 - **SQLite Storage**: Persistent price history and caching
 - **Rate Limiting**: Built-in protection against API abuse
@@ -16,14 +17,10 @@ A comprehensive Model Context Protocol (MCP) server with HTTP SSE (Server-Sent E
 ### Prerequisites
 
 - Python 3.11+
-- Serper API key (get one at https://serper.dev)
 
 ### Installation
 
 ```bash
-# Clone the repository
-cd unified-mcp-server
-
 # Create virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
@@ -36,7 +33,6 @@ playwright install chromium
 
 # Configure environment
 cp .env.example .env
-# Edit .env and add your SERPER_API_KEY
 ```
 
 ### Running the Server
@@ -54,7 +50,7 @@ The server will start at `http://localhost:8000`.
 docker build -t price-comparison-mcp .
 
 # Run the container
-docker run -p 8000:8000 -e SERPER_API_KEY=your_key price-comparison-mcp
+docker run -p 8000:8000 price-comparison-mcp
 ```
 
 ## API Endpoints
@@ -65,17 +61,18 @@ docker run -p 8000:8000 -e SERPER_API_KEY=your_key price-comparison-mcp
 | `/health` | GET | Detailed health status |
 | `/mcp/tools` | GET | List all available tools |
 | `/mcp/tools/{name}` | GET | Get specific tool details |
+| `/mcp/providers` | GET | List available search providers |
 | `/mcp` | POST | MCP JSON-RPC endpoint (SSE) |
 | `/mcp/stream` | POST | Streaming tool execution |
 | `/docs` | GET | OpenAPI documentation |
 
 ## Available Tools
 
-### Serper Search Tools
+### Web Search Tools (Free Providers)
 
-1. **serper_search** - Google search via Serper API
-2. **serper_shopping** - Google Shopping search with pricing data
-3. **serper_images** - Google Images search
+1. **web_search** - Web search with automatic fallback (DuckDuckGo, Google, Bing)
+2. **shopping_search** - Product search with pricing data
+3. **image_search** - Image search for visual product identification
 
 ### Web Scraping Tools
 
@@ -125,7 +122,7 @@ curl -X POST http://localhost:8000/mcp \
     "jsonrpc": "2.0",
     "method": "tools/call",
     "params": {
-      "name": "serper_search",
+      "name": "web_search",
       "arguments": {
         "query": "iPhone 15 Pro price Israel"
       }
@@ -154,7 +151,7 @@ async def test_mcp_server():
                 "jsonrpc": "2.0",
                 "method": "tools/call",
                 "params": {
-                    "name": "serper_shopping",
+                    "name": "shopping_search",
                     "arguments": {"query": "Samsung Galaxy S24"}
                 },
                 "id": 1
@@ -176,7 +173,6 @@ Configuration is managed via environment variables. See `.env.example` for all o
 |----------|---------|-------------|
 | `HOST` | 0.0.0.0 | Server host |
 | `PORT` | 8000 | Server port |
-| `SERPER_API_KEY` | - | Serper API key (required) |
 | `DATABASE_PATH` | database/prices.db | SQLite database path |
 | `LOG_LEVEL` | INFO | Logging level |
 | `RATE_LIMIT_REQUESTS` | 100 | Requests per window |
@@ -185,14 +181,15 @@ Configuration is managed via environment variables. See `.env.example` for all o
 ## Project Structure
 
 ```
-unified-mcp-server/
+.
 ├── src/
 │   ├── server/
 │   │   ├── main.py          # FastAPI + MCP server
 │   │   ├── sse_handler.py   # SSE streaming logic
 │   │   └── middleware.py    # CORS, logging, rate limiting
 │   ├── tools/
-│   │   ├── serper_tools.py  # Serper API integration
+│   │   ├── search_tools.py  # Search with free providers
+│   │   ├── search_providers.py # DuckDuckGo, Google, Bing providers
 │   │   ├── scraping_tools.py # Web scraping tools
 │   │   ├── price_tools.py   # Price intelligence tools
 │   │   └── storage_tools.py # SQLite storage tools
@@ -255,7 +252,7 @@ Tool execution streams events in the following format:
 
 ```json
 // Start event
-data: {"type": "start", "tool": "serper_search"}
+data: {"type": "start", "tool": "web_search"}
 
 // Progress event
 data: {"type": "progress", "message": "Executing tool..."}

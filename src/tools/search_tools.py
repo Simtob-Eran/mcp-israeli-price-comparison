@@ -1,10 +1,9 @@
 """Web search tools with automatic fallback to free providers.
 
-Supports multiple search providers with smart fallback:
-1. Serper API (if API key is configured)
-2. DuckDuckGo (free, no API key required)
-3. Google direct scraping (free, may be rate limited)
-4. Bing direct scraping (free backup)
+Supports multiple free search providers with smart fallback:
+1. DuckDuckGo (free, no API key required)
+2. Google direct scraping (free, may be rate limited)
+3. Bing direct scraping (free backup)
 """
 
 import hashlib
@@ -49,10 +48,9 @@ async def web_search(
     """Perform web search with automatic fallback to free providers.
 
     Tries multiple search providers in order until one succeeds:
-    1. Serper API (if SERPER_API_KEY is set)
-    2. DuckDuckGo (free, no API key)
-    3. Google scraping (free, may be rate limited)
-    4. Bing scraping (free backup)
+    1. DuckDuckGo (free, no API key)
+    2. Google scraping (free, may be rate limited)
+    3. Bing scraping (free backup)
 
     Args:
         query: Search query string.
@@ -61,7 +59,7 @@ async def web_search(
         language: Language code for results (default: Hebrew).
         use_cache: Whether to use cached results if available.
         preferred_providers: Optional list of providers to try in order.
-            Options: 'serper', 'duckduckgo', 'google_scraper', 'bing_scraper'
+            Options: 'duckduckgo', 'google_scraper', 'bing_scraper'
 
     Returns:
         Dictionary containing:
@@ -130,10 +128,9 @@ async def shopping_search(
     """Perform shopping search with automatic fallback to free providers.
 
     Specialized for product searches with pricing data. Uses fallback:
-    1. Serper Shopping API (if key available)
-    2. Google Shopping scraping
-    3. DuckDuckGo with price keywords
-    4. Bing with price keywords
+    1. Google Shopping scraping
+    2. DuckDuckGo with price keywords
+    3. Bing with price keywords
 
     Args:
         query: Product search query string.
@@ -215,10 +212,9 @@ async def image_search(
     """Search images with automatic fallback to free providers.
 
     Useful for visual product identification. Uses fallback:
-    1. Serper Images API (if key available)
-    2. Google Images scraping
-    3. Bing Images scraping
-    4. DuckDuckGo instant answers
+    1. Google Images scraping
+    2. Bing Images scraping
+    3. DuckDuckGo instant answers
 
     Args:
         query: Image search query string.
@@ -286,84 +282,10 @@ async def image_search(
         raise SearchError(f"Image search failed: {str(e)}")
 
 
-# Backwards compatibility aliases (old function names still work)
-async def serper_search(
-    query: str,
-    num_results: int = 10,
-    country: str = "il",
-    language: str = "he",
-    use_cache: bool = True,
-) -> Dict[str, Any]:
-    """Backwards compatible alias for web_search.
-
-    Note: Now uses automatic fallback to free providers if Serper API key
-    is not available.
-    """
-    return await web_search(
-        query=query,
-        num_results=num_results,
-        country=country,
-        language=language,
-        use_cache=use_cache,
-    )
-
-
-async def serper_shopping(
-    query: str,
-    num_results: int = 20,
-    country: str = "il",
-    language: str = "he",
-    use_cache: bool = True,
-) -> Dict[str, Any]:
-    """Backwards compatible alias for shopping_search.
-
-    Note: Now uses automatic fallback to free providers if Serper API key
-    is not available.
-    """
-    return await shopping_search(
-        query=query,
-        num_results=num_results,
-        country=country,
-        language=language,
-        use_cache=use_cache,
-    )
-
-
-async def serper_images(
-    query: str,
-    num_results: int = 10,
-    country: str = "il",
-    language: str = "he",
-    use_cache: bool = True,
-) -> Dict[str, Any]:
-    """Backwards compatible alias for image_search.
-
-    Note: Now uses automatic fallback to free providers if Serper API key
-    is not available.
-    """
-    return await image_search(
-        query=query,
-        num_results=num_results,
-        country=country,
-        language=language,
-        use_cache=use_cache,
-    )
-
-
 def get_available_providers() -> List[str]:
     """Get list of available search providers.
 
     Returns:
         List of provider names that are currently available.
     """
-    settings = get_settings()
-    available = []
-
-    for name, provider in PROVIDERS.items():
-        if name == "serper":
-            if settings.SERPER_API_KEY:
-                available.append(name)
-        else:
-            available.append(name)
-
-    return available
+    return list(PROVIDERS.keys())

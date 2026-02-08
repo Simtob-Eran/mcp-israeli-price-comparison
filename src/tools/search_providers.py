@@ -1,7 +1,7 @@
 """Free search providers with fallback support."""
 
+import json
 import logging
-import re
 import urllib.parse
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
@@ -127,7 +127,6 @@ class DuckDuckGoProvider(SearchProvider):
             snippet_elem = result.select_one(".result__snippet")
 
             if title_elem:
-                # DuckDuckGo uses redirect URLs, extract actual URL
                 href = title_elem.get("href", "")
                 actual_url = self._extract_url(href)
 
@@ -143,7 +142,6 @@ class DuckDuckGoProvider(SearchProvider):
     def _extract_url(self, ddg_url: str) -> str:
         """Extract actual URL from DuckDuckGo redirect URL."""
         if "uddg=" in ddg_url:
-            # Parse the uddg parameter
             parsed = urllib.parse.urlparse(ddg_url)
             params = urllib.parse.parse_qs(parsed.query)
             if "uddg" in params:
@@ -157,17 +155,15 @@ class DuckDuckGoProvider(SearchProvider):
         **kwargs,
     ) -> Dict[str, Any]:
         """DuckDuckGo doesn't have dedicated shopping - use regular search with price terms."""
-        # Add shopping-related terms to query
         shopping_query = f"{query} price buy מחיר"
 
         search_results = await self.search(shopping_query, num_results)
 
-        # Convert to shopping format
         shopping_results = []
         for item in search_results.get("organic", []):
             shopping_results.append({
                 "title": item.get("title", ""),
-                "price": None,  # Will need to be extracted from page
+                "price": None,
                 "link": item.get("link", ""),
                 "source": self._extract_domain(item.get("link", "")),
                 "rating": None,
@@ -199,7 +195,6 @@ class DuckDuckGoProvider(SearchProvider):
         **kwargs,
     ) -> Dict[str, Any]:
         """Search images via DuckDuckGo."""
-        # DuckDuckGo images require JavaScript, use instant answer API for basic images
         headers = {
             "User-Agent": self.settings.USER_AGENT,
         }
@@ -224,7 +219,6 @@ class DuckDuckGoProvider(SearchProvider):
 
                 images = []
 
-                # Get image from instant answer if available
                 if data.get("Image"):
                     images.append({
                         "title": data.get("Heading", query),
@@ -234,7 +228,6 @@ class DuckDuckGoProvider(SearchProvider):
                         "thumbnail": data.get("Image"),
                     })
 
-                # Get images from related topics
                 for topic in data.get("RelatedTopics", [])[:num_results]:
                     if isinstance(topic, dict) and topic.get("Icon", {}).get("URL"):
                         images.append({
@@ -286,7 +279,7 @@ class GoogleScraperProvider(SearchProvider):
 
         params = {
             "q": query,
-            "num": min(num_results + 5, 30),  # Request extra in case of ads
+            "num": min(num_results + 5, 30),
             "hl": language,
             "gl": country,
         }
@@ -324,26 +317,23 @@ class GoogleScraperProvider(SearchProvider):
         soup = BeautifulSoup(html, "lxml")
         results = []
 
-        # Google uses various selectors, try multiple patterns
         selectors = [
-            "div.g",  # Standard results
-            "div[data-sokoban-container]",  # Newer format
-            ".tF2Cxc",  # Another format
+            "div.g",
+            "div[data-sokoban-container]",
+            ".tF2Cxc",
         ]
 
         for selector in selectors:
-            for i, result in enumerate(soup.select(selector)):
+            for result in soup.select(selector):
                 if len(results) >= limit:
                     break
 
-                # Try to find title and link
                 link_elem = result.select_one("a[href^='http']")
                 title_elem = result.select_one("h3")
                 snippet_elem = result.select_one(".VwiC3b, .st, .s")
 
                 if link_elem and title_elem:
                     href = link_elem.get("href", "")
-                    # Filter out Google's own links
                     if "google.com" not in href:
                         results.append({
                             "title": title_elem.get_text(strip=True),
@@ -374,7 +364,7 @@ class GoogleScraperProvider(SearchProvider):
 
         params = {
             "q": query,
-            "tbm": "shop",  # Shopping tab
+            "tbm": "shop",
             "hl": language,
             "gl": country,
         }
@@ -410,7 +400,6 @@ class GoogleScraperProvider(SearchProvider):
         soup = BeautifulSoup(html, "lxml")
         results = []
 
-        # Try various shopping result selectors
         for item in soup.select(".sh-dgr__content, .sh-dlr__list-result, [data-docid]"):
             if len(results) >= limit:
                 break
@@ -425,7 +414,6 @@ class GoogleScraperProvider(SearchProvider):
                 price_text = ""
                 if price_elem:
                     price_text = price_elem.get_text(strip=True)
-                    # Also check data-price attribute
                     if not price_text:
                         price_text = price_elem.get("data-price", "")
 
@@ -458,7 +446,7 @@ class GoogleScraperProvider(SearchProvider):
 
         params = {
             "q": query,
-            "tbm": "isch",  # Images tab
+            "tbm": "isch",
             "hl": language,
             "gl": country,
         }
@@ -494,14 +482,12 @@ class GoogleScraperProvider(SearchProvider):
         soup = BeautifulSoup(html, "lxml")
         images = []
 
-        # Find image thumbnails
         for img in soup.select("img[data-src], img.rg_i"):
             if len(images) >= limit:
                 break
 
             src = img.get("data-src") or img.get("src", "")
             if src and not src.startswith("data:"):
-                # Find parent link
                 parent = img.find_parent("a")
                 link = parent.get("href", "") if parent else ""
 
@@ -599,7 +585,7 @@ class BingScraperProvider(SearchProvider):
         **kwargs,
     ) -> Dict[str, Any]:
         """Bing shopping via regular search with price terms."""
-        shopping_query = f"{query} buy price"
+        shopping_query = f"{query} buy price מחיר"
         search_results = await self.search(shopping_query, num_results)
 
         shopping_results = []
@@ -683,10 +669,8 @@ class BingScraperProvider(SearchProvider):
             if len(images) >= limit:
                 break
 
-            # Try to get image metadata from data attributes
             m_attr = item.get("m", "{}")
             try:
-                import json
                 metadata = json.loads(m_attr)
                 images.append({
                     "title": metadata.get("t", ""),
@@ -696,7 +680,6 @@ class BingScraperProvider(SearchProvider):
                     "thumbnail": metadata.get("turl", ""),
                 })
             except Exception:
-                # Fallback to basic parsing
                 img = item.select_one("img")
                 if img:
                     images.append({
@@ -710,161 +693,15 @@ class BingScraperProvider(SearchProvider):
         return images
 
 
-class SerperProvider(SearchProvider):
-    """Serper API provider - requires API key."""
-
-    name = "serper"
-
-    def __init__(self):
-        self.settings = get_settings()
-        self.base_url = self.settings.SERPER_BASE_URL
-
-    def _is_available(self) -> bool:
-        """Check if Serper API key is configured."""
-        return bool(self.settings.SERPER_API_KEY)
-
-    async def _make_request(
-        self,
-        endpoint: str,
-        payload: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """Make request to Serper API."""
-        if not self._is_available():
-            raise Exception("Serper API key not configured")
-
-        headers = {
-            "X-API-KEY": self.settings.SERPER_API_KEY,
-            "Content-Type": "application/json",
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self.base_url}/{endpoint}",
-                json=payload,
-                headers=headers,
-                timeout=30,
-            )
-            response.raise_for_status()
-            return response.json()
-
-    async def search(
-        self,
-        query: str,
-        num_results: int = 10,
-        country: str = "il",
-        language: str = "he",
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """Serper web search."""
-        payload = {
-            "q": query,
-            "num": num_results,
-            "gl": country,
-            "hl": language,
-        }
-
-        response = await self._make_request("search", payload)
-
-        return {
-            "organic": response.get("organic", []),
-            "knowledge_graph": response.get("knowledgeGraph"),
-            "related_searches": [
-                item.get("query", "") for item in response.get("relatedSearches", [])
-            ],
-            "search_parameters": {
-                "query": query,
-                "num_results": num_results,
-                "provider": self.name,
-            },
-        }
-
-    async def shopping_search(
-        self,
-        query: str,
-        num_results: int = 20,
-        country: str = "il",
-        language: str = "he",
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """Serper shopping search."""
-        payload = {
-            "q": query,
-            "num": num_results,
-            "gl": country,
-            "hl": language,
-        }
-
-        response = await self._make_request("shopping", payload)
-
-        shopping_items = []
-        for item in response.get("shopping", []):
-            shopping_items.append({
-                "title": item.get("title", ""),
-                "price": item.get("price"),
-                "link": item.get("link", ""),
-                "source": item.get("source"),
-                "rating": item.get("rating"),
-                "reviews": item.get("ratingCount"),
-                "thumbnail": item.get("imageUrl"),
-            })
-
-        return {
-            "shopping_results": shopping_items,
-            "search_parameters": {
-                "query": query,
-                "num_results": num_results,
-                "provider": self.name,
-            },
-        }
-
-    async def image_search(
-        self,
-        query: str,
-        num_results: int = 10,
-        country: str = "il",
-        language: str = "he",
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """Serper image search."""
-        payload = {
-            "q": query,
-            "num": num_results,
-            "gl": country,
-            "hl": language,
-        }
-
-        response = await self._make_request("images", payload)
-
-        images = []
-        for item in response.get("images", []):
-            images.append({
-                "title": item.get("title", ""),
-                "image_url": item.get("imageUrl", ""),
-                "link": item.get("link", ""),
-                "source": item.get("source"),
-                "thumbnail": item.get("thumbnailUrl"),
-            })
-
-        return {
-            "images": images,
-            "search_parameters": {
-                "query": query,
-                "num_results": num_results,
-                "provider": self.name,
-            },
-        }
-
-
-# Provider registry
+# Provider registry - free providers only
 PROVIDERS: Dict[str, SearchProvider] = {
     "duckduckgo": DuckDuckGoProvider(),
     "google_scraper": GoogleScraperProvider(),
     "bing_scraper": BingScraperProvider(),
-    "serper": SerperProvider(),
 }
 
-# Default fallback order (free providers first)
-DEFAULT_PROVIDER_ORDER = ["serper", "duckduckgo", "google_scraper", "bing_scraper"]
+# Default fallback order
+DEFAULT_PROVIDER_ORDER = ["duckduckgo", "google_scraper", "bing_scraper"]
 
 
 async def search_with_fallback(
@@ -896,13 +733,6 @@ async def search_with_fallback(
         provider = PROVIDERS.get(provider_name)
         if not provider:
             continue
-
-        # Skip Serper if no API key
-        if provider_name == "serper":
-            settings = get_settings()
-            if not settings.SERPER_API_KEY:
-                logger.debug("Skipping Serper - no API key configured")
-                continue
 
         try:
             logger.info(f"Trying {provider_name} for {search_type}: {query}")

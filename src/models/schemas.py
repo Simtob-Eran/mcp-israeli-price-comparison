@@ -59,12 +59,12 @@ class MCPResponse(BaseModel):
 
 
 # =============================================================================
-# Search Result Models (Serper)
+# Search Result Models
 # =============================================================================
 
 
 class OrganicResult(BaseModel):
-    """Organic search result from Serper."""
+    """Organic search result."""
 
     title: str
     link: str
@@ -82,7 +82,7 @@ class KnowledgeGraph(BaseModel):
 
 
 class SearchResult(BaseModel):
-    """Complete search result from Serper API."""
+    """Complete search result."""
 
     organic: List[OrganicResult] = Field(default_factory=list)
     knowledge_graph: Optional[KnowledgeGraph] = None
@@ -103,7 +103,7 @@ class ShoppingItem(BaseModel):
 
 
 class ShoppingResult(BaseModel):
-    """Shopping search results from Serper API."""
+    """Shopping search results."""
 
     shopping_results: List[ShoppingItem] = Field(default_factory=list)
     search_parameters: Optional[Dict[str, Any]] = None
@@ -120,7 +120,7 @@ class ImageResult(BaseModel):
 
 
 class ImagesResult(BaseModel):
-    """Image search results from Serper API."""
+    """Image search results."""
 
     images: List[ImageResult] = Field(default_factory=list)
     search_parameters: Optional[Dict[str, Any]] = None

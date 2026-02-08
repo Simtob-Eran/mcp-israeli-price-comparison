@@ -12,12 +12,9 @@ from .scraping_tools import (
     extract_structured_data,
     fetch_page_content,
 )
-from .serper_tools import (
+from .search_tools import (
     get_available_providers,
     image_search,
-    serper_images,
-    serper_search,
-    serper_shopping,
     shopping_search,
     web_search,
 )
@@ -33,10 +30,6 @@ __all__ = [
     "shopping_search",
     "image_search",
     "get_available_providers",
-    # Legacy aliases (backwards compatible)
-    "serper_search",
-    "serper_shopping",
-    "serper_images",
     # Scraping tools
     "fetch_page_content",
     "extract_structured_data",
